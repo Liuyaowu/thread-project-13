@@ -43,6 +43,27 @@ public class Registry {
     }
 
     /**
+     * 获取注册表
+     *
+     * @return
+     */
+    public Map<String, Map<String, ServiceInstance>> getRegistry() {
+        return registry;
+    }
+
+    /**
+     * 从注册表删除一个服务实例
+     *
+     * @param serviceName
+     * @param serviceInstanceId
+     */
+    public void remove(String serviceName, String serviceInstanceId) {
+        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
+        serviceInstanceMap.remove(serviceInstanceId);
+        System.out.println("服务实例[" + serviceInstanceId + "]从注册表中被摘除");
+    }
+
+    /**
      * 注册服务实例
      *
      * @param serviceInstance
@@ -51,10 +72,10 @@ public class Registry {
         Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
         if (serviceInstanceMap == null) {
             serviceInstanceMap = new HashMap<>();
-            registry.put(serviceInstance.getServiceInstanceId(), serviceInstanceMap);
+            registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
         }
 
-        serviceInstanceMap.put(serviceInstance.getServiceName(), serviceInstance);
+        serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
 
         System.out.println("服务实例[ " + serviceInstance + " ]完成注册");
         System.out.println("服务注册完成后的注册表信息:[ " + registry + " ]");

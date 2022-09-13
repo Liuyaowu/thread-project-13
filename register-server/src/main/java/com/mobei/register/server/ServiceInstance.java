@@ -14,6 +14,11 @@ import lombok.Data;
 public class ServiceInstance {
 
     /**
+     * 判断服务实例死亡的周期
+     */
+    public static final Long NOT_ALIVE_PERIOD = 90 * 1000L;
+
+    /**
      * 服务名称
      */
     private String serviceName;
@@ -52,6 +57,15 @@ public class ServiceInstance {
     }
 
     /**
+     * 判断服务实例契约是否存活
+     *
+     * @return
+     */
+    public Boolean isAlive() {
+        return this.lease.isAlive();
+    }
+
+    /**
      * 契约
      * <p>
      * 维护了一个服务实例跟当前注册中心之间的联系,包括心跳时间、创建时间等等
@@ -70,6 +84,17 @@ public class ServiceInstance {
         public void renew() {
             this.latestHeartbeatTime = System.currentTimeMillis();
             System.out.println("服务实例[ " + serviceInstanceId + " ]续约成功,当前时间: " + latestHeartbeatTime);
+        }
+
+        /**
+         * 判断服务实例契约是否存活
+         *
+         * @return
+         */
+        public Boolean isAlive() {
+            boolean isAlive = System.currentTimeMillis() - latestHeartbeatTime < NOT_ALIVE_PERIOD;
+            System.out.println(isAlive ? "服务实例存活" : "服务实例下线");
+            return isAlive;
         }
 
     }
