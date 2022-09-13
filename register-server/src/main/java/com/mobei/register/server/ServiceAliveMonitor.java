@@ -16,16 +16,26 @@ public class ServiceAliveMonitor {
      */
     public static final Long CHECK_ALIVE_INTERVAL = 60 * 1000L;
 
-    private Daemon daemon = new Daemon();
+    private Daemon daemon;
 
-    public void start() {
+    public ServiceAliveMonitor() {
+        ThreadGroup daemonThreadGroup = new ThreadGroup("daemon");
+
+        this.daemon = new Daemon(daemonThreadGroup, "ServiceAliveMonitor");
+
         /**
          * 设置为守护线程(后台线程)
          *
          * 守护线程:不会阻止JVM进程退出,会跟着JVM一起结束.不设置的话默认为工作线程,只要线程没结束JVM就不会退出
          */
         daemon.setDaemon(true);
+        /**
+         * 设置线程名称
+         */
+//        daemon.setName("ServiceAliveMonitor");
+    }
 
+    public void start() {
         daemon.start();
     }
 
@@ -36,9 +46,16 @@ public class ServiceAliveMonitor {
 
        private Registry registry = Registry.getInstance();
 
+        public Daemon(ThreadGroup daemonThreadGroup, String threadName) {
+            super(daemonThreadGroup, threadName);
+        }
+
         @Override
         public void run() {
             Map<String, Map<String, ServiceInstance>> registry;
+
+            System.out.println(Thread.currentThread().getName() + " 线程所属线程组:[" + Thread.currentThread().getThreadGroup() + "]");
+
             while (true) {
                 try {
                     registry = this.registry.getRegistry();

@@ -12,6 +12,8 @@ import java.util.UUID;
 public class RegisterServer {
 
     public static void main(String[] args) {
+        System.out.println(Thread.currentThread().getName() + " 线程所属线程组:[" + Thread.currentThread().getThreadGroup() + "]");
+
         String serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
         String serviceName = "inventory-service";
 
