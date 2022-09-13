@@ -60,8 +60,10 @@ public class RegisterClientWorker extends Thread {
         // 如果注册成功了,进入while true
         if (finishedRegister) {
             HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+            heartbeatRequest.setServiceName(SERVICE_NAME);
             heartbeatRequest.setServiceInstanceId(serviceInstanceId);
             HeartbeatResponse heartbeatResponse;
+
             while (true) {
                 try {
                     // 发送心跳

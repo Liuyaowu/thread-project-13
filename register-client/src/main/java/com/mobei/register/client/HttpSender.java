@@ -37,7 +37,7 @@ public class HttpSender {
      * @return
      */
     public HeartbeatResponse heartbeat(HeartbeatRequest request) {
-        System.out.println("发送心跳请求...");
+        System.out.println("服务实例: " + request + " 发送心跳请求...");
 
         // 收到register-server的响应之后,封装一个response对象返回
         HeartbeatResponse heartbeatResponse = new HeartbeatResponse();

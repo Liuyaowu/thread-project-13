@@ -1,4 +1,4 @@
-package com.mobei.register.client;
+package com.mobei.register.server;
 
 import lombok.Data;
 
