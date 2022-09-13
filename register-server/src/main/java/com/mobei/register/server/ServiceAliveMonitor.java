@@ -3,7 +3,7 @@ package com.mobei.register.server;
 import java.util.Map;
 
 /**
- * 微服务存货状态监控组件
+ * 微服务存活状态监控组件
  *
  * @author liuyaowu
  * @date 2022/9/13 20:53
@@ -19,6 +19,13 @@ public class ServiceAliveMonitor {
     private Daemon daemon = new Daemon();
 
     public void start() {
+        /**
+         * 设置为守护线程(后台线程)
+         *
+         * 守护线程:不会阻止JVM进程退出,会跟着JVM一起结束.不设置的话默认为工作线程,只要线程没结束JVM就不会退出
+         */
+        daemon.setDaemon(true);
+
         daemon.start();
     }
 
