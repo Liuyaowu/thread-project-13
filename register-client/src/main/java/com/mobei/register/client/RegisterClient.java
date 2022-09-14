@@ -23,10 +23,20 @@ public class RegisterClient {
      * http通信组件
      */
     private HttpSender httpSender;
+    /**
+     * 心跳线程
+     */
+    private HeartbeatWorker heartbeatWorker;
+    /**
+     * 服务实例是否在运行
+     */
+    private Boolean isRunning;
 
     public RegisterClient() {
         this.serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
         this.httpSender = new HttpSender();
+        this.heartbeatWorker = new HeartbeatWorker();
+        this.isRunning = true;
     }
 
     /**
@@ -45,11 +55,19 @@ public class RegisterClient {
             /**
              * 注册完成开启心跳
              */
-            HeartbeatWorker heartbeatWorker = new HeartbeatWorker();
             heartbeatWorker.start();
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * 停止RegisterClient组件
+     */
+    public void shutdown() {
+        this.isRunning = false;
+        this.heartbeatWorker.interrupt();
+        System.out.println("停止client");
     }
 
     private class RegisterWorker extends Thread {
@@ -82,7 +100,7 @@ public class RegisterClient {
             heartbeatRequest.setServiceInstanceId(serviceInstanceId);
             HeartbeatResponse heartbeatResponse;
 
-            while (true) {
+            while (isRunning) {
                 try {
                     // 发送心跳
                     heartbeatResponse = httpSender.heartbeat(heartbeatRequest);
