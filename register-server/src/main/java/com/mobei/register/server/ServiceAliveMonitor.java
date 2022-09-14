@@ -33,6 +33,11 @@ public class ServiceAliveMonitor {
          * 设置线程名称
          */
 //        daemon.setName("ServiceAliveMonitor");
+
+        /**
+         * 设置优先级,并没什么用
+         */
+        daemon.setPriority(10);
     }
 
     public void start() {

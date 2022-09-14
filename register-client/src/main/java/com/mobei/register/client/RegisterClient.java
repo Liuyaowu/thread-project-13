@@ -9,13 +9,24 @@ import java.util.UUID;
  */
 public class RegisterClient {
 
+    public static final String SERVICE_NAME = "inventory-service";
+    public static final String IP = "192.168.31.207";
+    public static final String HOSTNAME = "inventory01";
+    public static final int PORT = 9000;
+    private static final Long HEARTBEAT_INTERVAL = 30 * 1000L;
+
     /**
      * 服务实例id
      */
-    String serviceInstanceId;
+    private String serviceInstanceId;
+    /**
+     * http通信组件
+     */
+    private HttpSender httpSender;
 
     public RegisterClient() {
-        serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
+        this.serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
+        this.httpSender = new HttpSender();
     }
 
     /**
@@ -23,7 +34,65 @@ public class RegisterClient {
      * 2.注册成功之后,开启另外一个线程去发送心跳
      */
     public void start() {
-        new RegisterClientWorker(serviceInstanceId).start();
+        try {
+            RegisterWorker registerWorker = new RegisterWorker();
+            registerWorker.start();
+            /**
+             * 等待注册完成
+             */
+            registerWorker.join();
+
+            /**
+             * 注册完成开启心跳
+             */
+            HeartbeatWorker heartbeatWorker = new HeartbeatWorker();
+            heartbeatWorker.start();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private class RegisterWorker extends Thread {
+        /**
+         * 获取当前机器的信息,包括IP地址、hostname、以及配置的这个服务监听的端口号,
+         * 从配置文件里可以拿到
+         */
+        @Override
+        public void run() {
+            RegisterRequest registerRequest = new RegisterRequest();
+            registerRequest.setServiceName(SERVICE_NAME);
+            registerRequest.setIp(IP);
+            registerRequest.setHostname(HOSTNAME);
+            registerRequest.setPort(PORT);
+            registerRequest.setServiceInstanceId(serviceInstanceId);
+
+            RegisterResponse registerResponse = httpSender.register(registerRequest);
+            System.out.println("服务注册响应结果: " + registerResponse);
+        }
+    }
+
+    /**
+     * 心跳线程
+     */
+    private class HeartbeatWorker extends Thread {
+        @Override
+        public void run() {
+            HeartbeatRequest heartbeatRequest = new HeartbeatRequest();
+            heartbeatRequest.setServiceName(SERVICE_NAME);
+            heartbeatRequest.setServiceInstanceId(serviceInstanceId);
+            HeartbeatResponse heartbeatResponse;
+
+            while (true) {
+                try {
+                    // 发送心跳
+                    heartbeatResponse = httpSender.heartbeat(heartbeatRequest);
+                    System.out.println("心跳结果: " + heartbeatResponse);
+                    Thread.sleep(HEARTBEAT_INTERVAL);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
 }
