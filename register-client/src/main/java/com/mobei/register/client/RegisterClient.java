@@ -30,7 +30,7 @@ public class RegisterClient {
     /**
      * 服务实例是否在运行
      */
-    private Boolean isRunning;
+    private volatile Boolean isRunning;
 
     public RegisterClient() {
         this.serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
