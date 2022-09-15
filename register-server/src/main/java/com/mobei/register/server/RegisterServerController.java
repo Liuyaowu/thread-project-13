@@ -14,26 +14,28 @@ public class RegisterServerController {
     private ServiceRegistry registry = ServiceRegistry.getInstance();
 
     /**
-     * 注册服务
+     * 服务注册
      *
-     * @param registerRequest
-     * @return
+     * @param registerRequest 注册请求
+     * @return 注册响应
      */
     public RegisterResponse register(RegisterRequest registerRequest) {
         RegisterResponse registerResponse = new RegisterResponse();
 
         try {
+            // 在注册表中加入这个服务实例
             ServiceInstance serviceInstance = new ServiceInstance();
             serviceInstance.setHostname(registerRequest.getHostname());
             serviceInstance.setIp(registerRequest.getIp());
             serviceInstance.setPort(registerRequest.getPort());
-            serviceInstance.setServiceName(registerRequest.getServiceName());
             serviceInstance.setServiceInstanceId(registerRequest.getServiceInstanceId());
+            serviceInstance.setServiceName(registerRequest.getServiceName());
 
             registry.register(serviceInstance);
 
             registerResponse.setStatus(RegisterResponse.SUCCESS);
         } catch (Exception e) {
+            e.printStackTrace();
             registerResponse.setStatus(RegisterResponse.FAILURE);
         }
 
@@ -41,23 +43,28 @@ public class RegisterServerController {
     }
 
     /**
-     * 注册服务
+     * 发送心跳
      *
-     * @param heartbeatRequest
-     * @return
+     * @param heartbeatRequest 心跳请求
+     * @return 心跳响应
      */
     public HeartbeatResponse heartbeat(HeartbeatRequest heartbeatRequest) {
         HeartbeatResponse heartbeatResponse = new HeartbeatResponse();
 
         try {
+            // 对服务实例进行续约
             ServiceInstance serviceInstance = registry.getServiceInstance(
-                    heartbeatRequest.getServiceName(),
-                    heartbeatRequest.getServiceInstanceId());
+                    heartbeatRequest.getServiceName(), heartbeatRequest.getServiceInstanceId());
             serviceInstance.renew();
 
-            heartbeatResponse.setStatus(RegisterResponse.SUCCESS);
+            // 记录一下每分钟的心跳的次数
+            HeartbeatMeasureRate heartbeatMeasureRate = HeartbeatMeasureRate.getInstance();
+            heartbeatMeasureRate.increment();
+
+            heartbeatResponse.setStatus(HeartbeatResponse.SUCCESS);
         } catch (Exception e) {
-            heartbeatResponse.setStatus(RegisterResponse.FAILURE);
+            e.printStackTrace();
+            heartbeatResponse.setStatus(HeartbeatResponse.FAILURE);
         }
 
         return heartbeatResponse;
