@@ -74,4 +74,11 @@ public class HttpSender {
         return registry;
     }
 
+    /**
+     * 服务下线
+     */
+    public void cancel(String serviceName, String serviceInstanceId) {
+        System.out.println("服务下线,服务名称[" + serviceName + "],服务实例id[" + serviceInstanceId + "]");
+    }
+
 }
