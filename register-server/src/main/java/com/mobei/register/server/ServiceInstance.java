@@ -76,7 +76,7 @@ public class ServiceInstance {
         /**
          * 最近一次心跳的时间
          */
-        private Long latestHeartbeatTime = System.currentTimeMillis();
+        private volatile Long latestHeartbeatTime = System.currentTimeMillis();
 
         /**
          * 续约
