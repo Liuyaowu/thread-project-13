@@ -11,7 +11,7 @@ public class RegisterClientTest {
         RegisterClient registerClient = new RegisterClient();
         registerClient.start();
 
-        Thread.sleep(3000);
+        Thread.sleep(35000);
 
         registerClient.shutdown();
     }

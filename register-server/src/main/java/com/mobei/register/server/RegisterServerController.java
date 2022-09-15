@@ -1,5 +1,7 @@
 package com.mobei.register.server;
 
+import java.util.Map;
+
 /**
  * 负责接受client发送过来的请求,spring cloud eureka中用的组件是jersey
  *
@@ -9,7 +11,7 @@ package com.mobei.register.server;
  */
 public class RegisterServerController {
 
-    private Registry registry = Registry.getInstance();
+    private ServiceRegistry registry = ServiceRegistry.getInstance();
 
     /**
      * 注册服务
@@ -59,6 +61,15 @@ public class RegisterServerController {
         }
 
         return heartbeatResponse;
+    }
+
+    /**
+     * 拉取服务注册表
+     *
+     * @return
+     */
+    public Map<String, Map<String, ServiceInstance>> fetchServiceRegistry() {
+        return registry.getRegistry();
     }
 
 }

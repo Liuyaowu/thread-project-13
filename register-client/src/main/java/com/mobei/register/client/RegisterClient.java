@@ -31,12 +31,17 @@ public class RegisterClient {
      * 服务实例是否在运行
      */
     private volatile Boolean isRunning;
+    /**
+     * 客户端缓存的注册表
+     */
+    private ClientCachedServiceRegistry registry;
 
     public RegisterClient() {
         this.serviceInstanceId = UUID.randomUUID().toString().replace("-", "");
         this.httpSender = new HttpSender();
         this.heartbeatWorker = new HeartbeatWorker();
         this.isRunning = true;
+        this.registry = new ClientCachedServiceRegistry(this, httpSender);
     }
 
     /**
@@ -56,6 +61,11 @@ public class RegisterClient {
              * 注册完成开启心跳
              */
             heartbeatWorker.start();
+
+            /**
+             * 初始化本地缓存注册服务
+             */
+            this.registry.initialize();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -67,6 +77,7 @@ public class RegisterClient {
     public void shutdown() {
         this.isRunning = false;
         this.heartbeatWorker.interrupt();
+        this.registry.destroy();
         System.out.println("停止client");
     }
 
@@ -111,6 +122,10 @@ public class RegisterClient {
                 }
             }
         }
+    }
+
+    public Boolean getRunning() {
+        return isRunning;
     }
 
 }
