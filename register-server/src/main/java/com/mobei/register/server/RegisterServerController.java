@@ -33,6 +33,20 @@ public class RegisterServerController {
 
             registry.register(serviceInstance);
 
+            // 更新自我保护机制的阈值
+            synchronized (SelfProtectionPolicy.class) {
+                SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
+
+                /**
+                 * 期待每分钟心跳次数:30秒一次心跳,那么每注册一个服务实例的话,服务注册中心每分钟接收到的心跳次数应该加2
+                 *
+                 * todo 这里硬编码了,正常来说心跳次数是可以调整的,那么每分钟的心跳次数应该是动态计算的
+                 */
+                long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
+                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
+                selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+            }
+
             registerResponse.setStatus(RegisterResponse.SUCCESS);
         } catch (Exception e) {
             e.printStackTrace();
@@ -85,6 +99,14 @@ public class RegisterServerController {
     public void cancel(String serviceName, String serviceInstanceId) {
         // 从服务注册中摘除实例
         registry.remove(serviceName, serviceInstanceId);
+
+        // 更新自我保护机制的阈值
+        synchronized (SelfProtectionPolicy.class) {
+            SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
+            long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
+            selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
+            selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+        }
     }
 
 }
