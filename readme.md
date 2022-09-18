@@ -200,7 +200,93 @@ monitor的锁是支持重入加锁的,如果一个线程第一次synchronized那
 CAS操作包含三个操作数:内存中的值(V)、预期原值(A)和新值(B).如果内存位置的值与预期原值相匹配,
 那么处理器会自动将该位置值更新为新值.否则处理器不做任何操作
 
+### 16.AtomicInteger源码剖析
+###### 1.仅限JDK内部使用的Unsafe类
+Unsafe类是JDK底层的一个类,限制了不允许外部实例化以及使用他里面的方法.首先构造函数是私有化,不能手动去实例化.
+其次如果用Unsafe.getUnsafe()方法来获取一个实例是不行的,他会判断如果当前是属于用户的应用系统,
+识别到有外部系统的类加载器以后就会报错,不让外部来获取实例
 
+JDK源码里面,JDK自己内部来使用,不是对外的.
+
+Unsafe封装了一些不安全的操作,指针相关的一些操作,Atomic原子类底层大量的运用了Unsafe
+(1)内部变量value使用volatile修饰
+(2)Unsafe: 核心类,负责执行CAS操作
+(3)API接口:Atomic原子类的各种使用方式
+
+###### 2.无限重复循环以及CAS操作
+```
+private static final long valueOffset;
+private volatile int value;
+
+static {
+    try {
+        valueOffset = unsafe.objectFieldOffset
+            (AtomicInteger.class.getDeclaredField("value"));
+    } catch (Exception ex) { throw new Error(ex); }
+}
+```
+类初始化的时候执行的.valueOffset是value这个字段在AtomicInteger这个类中的偏移量,无论是在磁盘的.class文件里还是在JVM内存中,
+在底层这个类是有自己对应的结构的.大概可以理解为:value这个字段具体是在AtomicInteger这个类的哪个位置,offset偏移量是很底层的操作,
+是通过unsafe来实现的.刚刚在类初始化的时候,就会完成这个操作的,并且是final的,一旦初始化完毕就不会再变更了
+
+```
+AtomicInteger.class:
+public final int incrementAndGet() {
+    return unsafe.getAndAddInt(this, valueOffset, 1) + 1;
+}
+    
+Unsafe.class:
+public final int getAndAddInt(AtomicInteger atomicInteger, long valueOffset, int newValue) {
+    int currentVal;
+    do {
+        /**
+         * 先根据valueOffset偏移量,就知道value这个字段的位置,可以获取到当前value的值
+         */
+        currentVal = this.getIntVolatile(atomicInteger, valueOffset);
+    } while(!this.compareAndSwapInt(atomicInteger, valueOffset, currentVal, currentVal + newValue));
+
+    return fromMemeryVal;
+}
+```
+ compareAndSwapInt()是CAS方法,会拿刚刚获取到的那个currentVal的值作为当前的value的值,
+ 去跟当前AtomicInteger对象实例中的value的值去进行比较,这就是compare的过程.
+ 如果是一样的话就会set,也就是将value的值给设置为:currentVal(之前拿到的值) + 1(递增的值).
+ 如果currentVal(获取到的值)跟AtomicInteger中获取到的当前的值不一样的话,compareAndSwapInt方法就会返回false,
+ while循环里拿到的是false的话,就会自动进入下一轮的循环.如果成功的话会返回一个currentVal的值,
+ 是递增1之前的一个旧的值,所以会在外层方法中加1返回,告诉你当前累加1之后最新的值
+
+###### 3.底层CPU指令是如何实现CAS语义的
+用了一个native方法,可以通过发送一些cpu的指令,确保CAS过程绝对是原子的,具体是怎么来实现呢?
+以前的cpu会通过一些指令来锁掉某一小块的内存,后来会做了一些优化,可以保证仅仅只有一个线程在
+同一时间可以对某块小内存中的数据做CAS的操作
+
+compare -> set,这是一系列的步骤.在执行这个步骤的时候,每个线程都是原子的,
+有一个线程在执行CAS一系列的比较和设置的过程中其他的线程是不能来执行的
+
+- cpu指令来实现
+- cpu会通过一些轻量级的锁小块内存的机制来实现
+
+### 17.Atomic原子类体系的CAS语义存在的三大缺点分析
+- 1、ABA问题:如果某个值一开始是A,后来变成了B,然后又变成了A,本来期望的是值如果是第一个A才会设置新值,
+  结果第二个A一比较也ok,也设置了新值,跟期望是不符合的.所以atomic包里有AtomicStampedReference类,
+  就是会比较两个值的引用是否一致,一致才会设置新值
+
+假设一开始变量i = 1,先获取这个i的值是1,然后累加了1变成了2,但是在此期间别的线程将i -> 1 -> 2 -> 3 -> 1,
+这个期间这个值是被改过的,只不过最后将这个值改成了最初的那个值,后来去compareAndSet的时候,会发现这个i还是1,
+就将它设置成了2,设置成功了
+
+实际使用中,用AtomicInteger常见的是计数,所以说一般是不断累加的,所以ABA问题比较少见
+
+ABA的危害:https://www.cnblogs.com/yingying7/p/12573240.html
+
+- 2、无限循环问题:看源码就知道Atomic类设置值的时候会进入一个无限循环,只要不成功就不停循环再次尝试,导致CPU很高.
+  这个在高并发修改一个值的时候其实挺常见的,比如用AtomicInteger在内存里搞一个原子变量,然后高并发下多线程频繁修改,
+  其实可能会导致这个compareAndSet()里要循环N次才设置成功,所以还是要考虑到的
+
+JDK 1.8引入的LongAdder来解决,分段CAS思路
+
+- 3、多变量原子问题:一般的AtomicInteger只能保证一个变量的原子性,但是如果多个变量呢?
+  可以用AtomicReference,这个是封装自定义对象的,多个变量可以放一个自定义对象里,会检查这个对象的引用是不是一个
 
 
 
