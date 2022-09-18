@@ -187,6 +187,11 @@ monitor的锁是支持重入加锁的,如果一个线程第一次synchronized那
 此时获取锁的线程就会对那个对象的monitor的计数器减1,如果有多次重入加锁就会对应多次减1,直到最后计数器是0,
 然后后面block住阻塞的线程，会再次尝试获取锁，但是只有一个线程可以获取到锁
 
+### 14.wait与sleep的区别
+- wait会释放锁,sleep不会释放锁
+- wait必须通过notify唤醒或者wait(timeout)阻塞一段时间后自己唤醒继续争抢锁
+- wait与notify,必须在synchronized代码块中使用,因为必须是拥有monitor lock的线程才可以执行
+  wait与notify操作.因此wait与notify必须与synchronized一起对同一个对象使用,她们的monitor才是一样的
 
 
 

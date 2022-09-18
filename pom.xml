@@ -12,6 +12,7 @@
         <module>register-server</module>
         <module>register-client</module>
         <module>concurrent-project</module>
+        <module>distributed-filesystem</module>
     </modules>
 
     <properties>

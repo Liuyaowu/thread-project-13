@@ -49,7 +49,7 @@ public class ServiceAliveMonitor {
      */
     private class Daemon extends Thread {
 
-       private ServiceRegistry serviceRegistry = ServiceRegistry.getInstance();
+        private ServiceRegistry registry = ServiceRegistry.getInstance();
 
         public Daemon(ThreadGroup daemonThreadGroup, String threadName) {
             super(daemonThreadGroup, threadName);
@@ -57,26 +57,38 @@ public class ServiceAliveMonitor {
 
         @Override
         public void run() {
-            Map<String, Map<String, ServiceInstance>> registry;
-
-            System.out.println(Thread.currentThread().getName() + " 线程所属线程组:[" + Thread.currentThread().getThreadGroup() + "]");
+            Map<String, Map<String, ServiceInstance>> registryMap = null;
 
             while (true) {
                 try {
-                    registry = this.serviceRegistry.getRegistry();
-                    for (Map.Entry<String, Map<String, ServiceInstance>> entry : registry.entrySet()) {
-                        Map<String, ServiceInstance> serviceInstanceMap = entry.getValue();
-                        for (Map.Entry<String, ServiceInstance> serviceInstanceEntry : serviceInstanceMap.entrySet()) {
-                            ServiceInstance serviceInstance = serviceInstanceEntry.getValue();
+                    // 可以判断一下是否要开启自我保护机制
+                    SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
+                    if (selfProtectionPolicy.isEnable()) {
+                        Thread.sleep(CHECK_ALIVE_INTERVAL);
+                        continue;
+                    }
 
+                    registryMap = registry.getRegistry();
+
+                    for (String serviceName : registryMap.keySet()) {
+                        Map<String, ServiceInstance> serviceInstanceMap = registryMap.get(serviceName);
+
+                        for (ServiceInstance serviceInstance : serviceInstanceMap.values()) {
                             /**
-                             * 服务实例距离上次心跳时间超过了默认的存活周期时长,摘除服务
+                             * 说明服务实例距离上一次发送心跳已经超过90秒了,认为这个服务就死了,从注册表中摘除这个服务实例
                              */
                             if (!serviceInstance.isAlive()) {
-                                this.serviceRegistry.remove(serviceInstance.getServiceName(), serviceInstance.getServiceInstanceId());
+                                registry.remove(serviceName, serviceInstance.getServiceInstanceId());
+                                long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
+                                // 更新自我保护机制的阈值
+                                synchronized (SelfProtectionPolicy.class) {
+                                    selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
+                                    selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+                                }
                             }
                         }
                     }
+
                     Thread.sleep(CHECK_ALIVE_INTERVAL);
                 } catch (Exception e) {
                     e.printStackTrace();
