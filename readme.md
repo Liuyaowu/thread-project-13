@@ -193,7 +193,12 @@ monitor的锁是支持重入加锁的,如果一个线程第一次synchronized那
 - wait与notify,必须在synchronized代码块中使用,因为必须是拥有monitor lock的线程才可以执行
   wait与notify操作.因此wait与notify必须与synchronized一起对同一个对象使用,她们的monitor才是一样的
 
+### 15.AtomicInteger中的CAS无锁化原理和思路介绍
 
+![img.png](zimgs/AtomicInteger.png)
+
+CAS操作包含三个操作数:内存中的值(V)、预期原值(A)和新值(B).如果内存位置的值与预期原值相匹配,
+那么处理器会自动将该位置值更新为新值.否则处理器不做任何操作
 
 
 
