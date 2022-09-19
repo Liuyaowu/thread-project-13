@@ -1,6 +1,6 @@
 package com.mobei.register.server;
 
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
  * 心跳测量计数器
@@ -20,7 +20,8 @@ public class HeartbeatCounter {
      * 最近一分钟的心跳次数
      */
 //    private long latestMinuteHeartbeatRate = 0L;
-    private AtomicLong latestMinuteHeartbeatRate = new AtomicLong(0);
+//    private AtomicLong latestMinuteHeartbeatRate = new AtomicLong(0L);
+    private LongAdder latestMinuteHeartbeatRate = new LongAdder();
 
     /**
      * 最近一分钟的时间戳
@@ -56,7 +57,8 @@ public class HeartbeatCounter {
      * 增加一次最近一分钟的心跳次数
      */
     public void increment() {
-        latestMinuteHeartbeatRate.incrementAndGet();
+//        latestMinuteHeartbeatRate.incrementAndGet();
+        latestMinuteHeartbeatRate.increment();
     }
 
     /**
@@ -65,8 +67,9 @@ public class HeartbeatCounter {
 //    public synchronized long get() {
 //        return latestMinuteHeartbeatRate;
 //    }
-    public synchronized long get() {
-        return latestMinuteHeartbeatRate.get();
+    public long get() {
+//        return latestMinuteHeartbeatRate.get();
+        return latestMinuteHeartbeatRate.longValue();
     }
 
     private class Daemon extends Thread {
@@ -76,7 +79,7 @@ public class HeartbeatCounter {
                 try {
                     long currentTime = System.currentTimeMillis();
                     if (currentTime - latestMinuteTimestamp > 60 * 1000) {
-                        latestMinuteHeartbeatRate = new AtomicLong(0L);
+                        latestMinuteHeartbeatRate = new LongAdder();
                         latestMinuteTimestamp = System.currentTimeMillis();
                     }
                     Thread.sleep(1000);

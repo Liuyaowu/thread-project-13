@@ -288,5 +288,17 @@ JDK 1.8引入的LongAdder来解决,分段CAS思路
 - 3、多变量原子问题:一般的AtomicInteger只能保证一个变量的原子性,但是如果多个变量呢?
   可以用AtomicReference,这个是封装自定义对象的,多个变量可以放一个自定义对象里,会检查这个对象的引用是不是一个
 
+### 18.J8 LongAdder是如何通过分段CAS机制优化多线程自旋问题的
+
+![img.png](zimgs/AtomicLong.png)
+
+Java 8提供的一个对AtomicLong改进后的一个类:LongAdder.
+
+大量线程并发更新一个原子类的时候,天然的一个问题就是自旋,会导致并发性能还是有待提升.对于LongAdder,当大量线程并发更新的时候,
+会将对base的自旋拆分成多个Cell,多个线程分散到多个Cell上进行自旋.并且LongAdder采用分段迁移,当某一个线程对一个Cell更新的时候,
+发现很难更新他的值,出现了多次自旋的问题,如果他CAS失败了,自动迁移段,去尝试更新别的Cell的值,这样的话就可以让一个线程不会盲目的
+等待一个cell的值
+
+当需要get LongAdder的值的时候会将各个cell的值和base的值累加到一起返回.
 
 
