@@ -10,7 +10,7 @@ import java.util.Map;
  * @date 2022/9/15 22:08
  * @remark
  */
-public class ClientCachedServiceRegistry {
+public class CachedServiceRegistry {
 
     /**
      * 从注册中心拉取服务注册表的间隔周期
@@ -31,7 +31,7 @@ public class ClientCachedServiceRegistry {
 
     private RegisterClient registerClient;
 
-    public ClientCachedServiceRegistry(RegisterClient registerClient, HttpSender httpSender) {
+    public CachedServiceRegistry(RegisterClient registerClient, HttpSender httpSender) {
         this.daemon = new Daemon();
         this.registerClient = registerClient;
         this.httpSender = httpSender;
