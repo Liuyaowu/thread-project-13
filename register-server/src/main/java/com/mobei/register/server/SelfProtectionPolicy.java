@@ -35,8 +35,8 @@ public class SelfProtectionPolicy {
      * @return
      */
     public Boolean isEnable() {
-        HeartbeatMeasureRate heartbeatMeasureRate = HeartbeatMeasureRate.getInstance();
-        long latestMinuteHeartbeatRate = heartbeatMeasureRate.get();
+        HeartbeatCounter heartbeatCounter = HeartbeatCounter.getInstance();
+        long latestMinuteHeartbeatRate = heartbeatCounter.get();
 
         if (latestMinuteHeartbeatRate < this.expectedHeartbeatThreshold) {
             System.out.println("【自我保护机制开启】最近一分钟心跳次数=" + latestMinuteHeartbeatRate + ", 期望心跳次数=" + this.expectedHeartbeatThreshold);
