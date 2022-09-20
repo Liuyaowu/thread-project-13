@@ -3,7 +3,7 @@ package com.mobei.register.client;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicStampedReference;
 
 /**
  * 客户端缓存的注册中心的注册表
@@ -29,7 +29,7 @@ public class CachedServiceRegistry {
     /**
      * 客户端缓存的所有的服务实例的信息
      */
-    private AtomicReference<Applications> applications = new AtomicReference<>(new Applications());
+    private AtomicStampedReference<Applications> atomicStampedReferenceApplications;
 
     private RegisterClient registerClient;
 
@@ -43,6 +43,7 @@ public class CachedServiceRegistry {
         this.fetchDeltaRegistryWorker = new FetchDeltaRegistryWorker();
         this.registerClient = registerClient;
         this.httpSender = httpSender;
+        this.atomicStampedReferenceApplications = new AtomicStampedReference<>(new Applications(), 0);
     }
 
     /**
@@ -74,13 +75,16 @@ public class CachedServiceRegistry {
             Applications fetchedApplications = httpSender.fetchFullRegistry();
             while (true) {
                 // 客户端缓存的实例
-                Applications expectedApplications = applications.get();
-
+                Applications expectedApplications = atomicStampedReferenceApplications.getReference();
+                int expectedStamp = atomicStampedReferenceApplications.getStamp();
                 /**
                  * 用本地的AtomicReference和它里面取出来的值做CAS比较,如果引用对象是同一个,说明没有其它线程更改过,
                  * 那么就把引用对象更新为刚刚拉取到的实例-fetchedApplications,退出循环
                  */
-                if (applications.compareAndSet(expectedApplications, fetchedApplications)) {
+                if (atomicStampedReferenceApplications.compareAndSet(expectedApplications,
+                        fetchedApplications,
+                        expectedStamp,
+                        expectedStamp++)) {
                     break;
                 }
             }
@@ -122,8 +126,8 @@ public class CachedServiceRegistry {
          * @param deltaRegistry
          */
         private void mergeDeltaRegistry(DeltaRegistry deltaRegistry) {
-            synchronized (applications) {
-                Map<String, Map<String, ServiceInstance>> registry = applications.get().getRegistry();
+            synchronized (atomicStampedReferenceApplications) {
+                Map<String, Map<String, ServiceInstance>> registry = atomicStampedReferenceApplications.getReference().getRegistry();
                 LinkedList<RecentlyChangedServiceInstance> recentlyChangedServiceInstances = deltaRegistry.getRecentlyChangedQueue();
                 String serviceName, serviceInstanceId;
                 for (RecentlyChangedServiceInstance recentlyChangedItem : recentlyChangedServiceInstances) {
@@ -163,9 +167,11 @@ public class CachedServiceRegistry {
             // 封装一下增量注册表的对象，也就是拉取增量注册表的时候，一方面是返回那个数据
             // 另外一方面，是要那个对应的register-server端的服务实例的数量
             Long serverSideTotalCount = deltaRegistry.getServiceInstanceTotalCount();
+            Map<String, Map<String, ServiceInstance>> registry = atomicStampedReferenceApplications.getReference().getRegistry();
+            int expectedStamp = atomicStampedReferenceApplications.getStamp();
 
             Long clientSideTotalCount = 0L;
-            for (Map<String, ServiceInstance> serviceInstanceMap : applications.get().getRegistry().values()) {
+            for (Map<String, ServiceInstance> serviceInstanceMap : registry.values()){
                 clientSideTotalCount += serviceInstanceMap.size();
             }
 
@@ -175,13 +181,16 @@ public class CachedServiceRegistry {
 
                 while (true) {
                     // 客户端缓存的实例
-                    Applications expectedApplications = applications.get();
+                    Applications expectedApplications = atomicStampedReferenceApplications.getReference();
 
                     /**
                      * 用本地的AtomicReference和它里面取出来的值做CAS比较,如果引用对象是同一个,说明没有其它线程更改过,
                      * 那么就把引用对象更新为刚刚拉取到的实例-fetchedApplications,退出循环
                      */
-                    if (applications.compareAndSet(expectedApplications, fetchedApplications)) {
+                    if (atomicStampedReferenceApplications.compareAndSet(expectedApplications,
+                            fetchedApplications,
+                            expectedStamp,
+                            expectedStamp ++)) {
                         break;
                     }
                 }
@@ -209,7 +218,7 @@ public class CachedServiceRegistry {
      * @return
      */
     public Map<String, Map<String, ServiceInstance>> getRegistry() {
-        return applications.get().getRegistry();
+        return atomicStampedReferenceApplications.getReference().getRegistry();
     }
 
     /**
