@@ -125,7 +125,12 @@ public class RegisterClient {
         }
     }
 
-    public Boolean getRunning() {
+    /**
+     * 返回RegisterClient是否正在运行
+     *
+     * @return
+     */
+    public Boolean isRunning() {
         return isRunning;
     }
 

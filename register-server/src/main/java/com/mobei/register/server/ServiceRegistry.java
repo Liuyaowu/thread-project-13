@@ -31,6 +31,9 @@ public class ServiceRegistry {
      */
     private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue = new LinkedList<>();
 
+    /**
+     * 构造函数
+     */
     private ServiceRegistry() {
         // 启动后台线程监控最近变更的队列
         RecentlyChangedQueueMonitor recentlyChangedQueueMonitor = new RecentlyChangedQueueMonitor();
@@ -38,16 +41,40 @@ public class ServiceRegistry {
         recentlyChangedQueueMonitor.start();
     }
 
-    public static ServiceRegistry getInstance() {
-        return instance;
+    /**
+     * 服务注册
+     *
+     * @param serviceInstance 服务实例
+     */
+    public synchronized void register(ServiceInstance serviceInstance) {
+        System.out.println("服务注册......【" + serviceInstance + "】");
+
+        // 将服务实例放入最近变更的队列中
+        RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
+                serviceInstance,
+                System.currentTimeMillis(),
+                ServiceInstanceOperation.REGISTER);
+        recentlyChangedQueue.offer(recentlyChangedItem);
+
+        System.out.println("最近变更队列：" + recentlyChangedQueue);
+
+        // 将服务实例放入注册表中
+        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
+        if (serviceInstanceMap == null) {
+            serviceInstanceMap = new HashMap<>();
+            registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
+        }
+        serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
+
+        System.out.println("注册表：" + registry);
     }
 
     /**
      * 获取服务实例
      *
-     * @param serviceName
-     * @param serviceInstanceId
-     * @return
+     * @param serviceName       服务名称
+     * @param serviceInstanceId 服务实例id
+     * @return 服务实例
      */
     public synchronized ServiceInstance getServiceInstance(String serviceName, String serviceInstanceId) {
         Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
@@ -55,12 +82,28 @@ public class ServiceRegistry {
     }
 
     /**
-     * 获取注册表
+     * 获取整个注册表
      *
      * @return
      */
     public synchronized Map<String, Map<String, ServiceInstance>> getRegistry() {
         return registry;
+    }
+
+    /**
+     * 获取最近有变化的注册表
+     *
+     * @return
+     */
+    public synchronized DeltaRegistry getDeltaRegistry() {
+        Long totalCount = 0L;
+        for (Map<String, ServiceInstance> serviceInstanceMap : registry.values()) {
+            totalCount += serviceInstanceMap.size();
+        }
+
+        DeltaRegistry deltaRegistry = new DeltaRegistry(recentlyChangedQueue, totalCount);
+
+        return deltaRegistry;
     }
 
     /**
@@ -92,37 +135,19 @@ public class ServiceRegistry {
     }
 
     /**
-     * 注册服务实例
+     * 获取服务注册表的单例实例
      *
-     * @param serviceInstance
+     * @return
      */
-    public synchronized void register(ServiceInstance serviceInstance) {
-        System.out.println("服务注册......【" + serviceInstance + "】");
-
-        // 将服务实例放入最近变更的队列中
-        RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
-                serviceInstance,
-                System.currentTimeMillis(),
-                ServiceInstanceOperation.REGISTER);
-        recentlyChangedQueue.offer(recentlyChangedItem);
-
-        System.out.println("最近变更队列：" + recentlyChangedQueue);
-
-        // 将服务实例放入注册表中
-        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
-        if (serviceInstanceMap == null) {
-            serviceInstanceMap = new HashMap<>();
-            registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
-        }
-        serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
-
-        System.out.println("注册表：" + registry);
+    public static ServiceRegistry getInstance() {
+        return instance;
     }
 
     /**
      * 最近变化的服务实例
      */
     class RecentlyChangedServiceInstance {
+
         /**
          * 服务实例
          */
@@ -136,9 +161,10 @@ public class ServiceRegistry {
          */
         String serviceInstanceOperation;
 
-        public RecentlyChangedServiceInstance(ServiceInstance serviceInstance,
-                                              Long changedTimestamp,
-                                              String serviceInstanceOperation) {
+        public RecentlyChangedServiceInstance(
+                ServiceInstance serviceInstance,
+                Long changedTimestamp,
+                String serviceInstanceOperation) {
             this.serviceInstance = serviceInstance;
             this.changedTimestamp = changedTimestamp;
             this.serviceInstanceOperation = serviceInstanceOperation;
@@ -146,10 +172,10 @@ public class ServiceRegistry {
 
         @Override
         public String toString() {
-            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance
-                    + ", changedTimestamp=" + changedTimestamp
-                    + ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
+            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance + ", changedTimestamp="
+                    + changedTimestamp + ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
         }
+
     }
 
     /**
@@ -163,7 +189,7 @@ public class ServiceRegistry {
         /**
          * 删除
          */
-        String REMOVE = "remove";
+        String REMOVE = "REMOVE";
     }
 
     /**
@@ -179,9 +205,8 @@ public class ServiceRegistry {
                         Long currentTimestamp = System.currentTimeMillis();
 
                         while ((recentlyChangedItem = recentlyChangedQueue.peek()) != null) {
-                            /**
-                             * 如果一个服务实例变更信息在队列里存在超过3分钟了就从队列中移除
-                             */
+                            // 判断如果一个服务实例变更信息已经在队列里存在超过3分钟了
+                            // 就从队列中移除
                             if (currentTimestamp - recentlyChangedItem.changedTimestamp > RECENTLY_CHANGED_ITEM_EXPIRED) {
                                 recentlyChangedQueue.pop();
                             }
