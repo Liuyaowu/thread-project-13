@@ -1,8 +1,5 @@
 package com.mobei.register.server;
 
-import java.util.LinkedList;
-import java.util.Map;
-
 /**
  * 负责接受client发送过来的请求,spring cloud eureka中用的组件是jersey
  *
@@ -90,8 +87,8 @@ public class RegisterServerController {
      *
      * @return
      */
-    public Map<String, Map<String, ServiceInstance>> fetchFullServiceRegistry() {
-        return registry.getRegistry();
+    public Applications fetchFullServiceRegistry() {
+        return new Applications(registry.getRegistry());
     }
 
     /**
@@ -99,8 +96,8 @@ public class RegisterServerController {
      *
      * @return
      */
-    public LinkedList<ServiceRegistry.RecentlyChangedServiceInstance> fetchDeltaServiceRegistry() {
-        return registry.getRecentlyChangedQueue();
+    public DeltaRegistry fetchDeltaServiceRegistry() {
+        return registry.getDeltaRegistry();
     }
 
     /**

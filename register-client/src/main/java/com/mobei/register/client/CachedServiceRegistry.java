@@ -3,6 +3,7 @@ package com.mobei.register.client;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 客户端缓存的注册中心的注册表
@@ -26,9 +27,9 @@ public class CachedServiceRegistry {
     private HttpSender httpSender;
 
     /**
-     * 客户端缓存的注册中心的注册表: 服务名称 -> (服务实例id -> 服务实例)
+     * 客户端缓存的所有的服务实例的信息
      */
-    private Map<String, Map<String, ServiceInstance>> registry = new HashMap<>();
+    private AtomicReference<Applications> applications = new AtomicReference<>(new Applications());
 
     private RegisterClient registerClient;
 
@@ -69,8 +70,20 @@ public class CachedServiceRegistry {
     private class FetchFullRegistryWorker extends Thread {
         @Override
         public void run() {
-            // 拉取全量注册表
-            registry = httpSender.fetchFullRegistry();
+            // 刚刚拉取到的实例
+            Applications fetchedApplications = httpSender.fetchFullRegistry();
+            while (true) {
+                // 客户端缓存的实例
+                Applications expectedApplications = applications.get();
+
+                /**
+                 * 用本地的AtomicReference和它里面取出来的值做CAS比较,如果引用对象是同一个,说明没有其它线程更改过,
+                 * 那么就把引用对象更新为刚刚拉取到的实例-fetchedApplications,退出循环
+                 */
+                if (applications.compareAndSet(expectedApplications, fetchedApplications)) {
+                    break;
+                }
+            }
         }
     }
 
@@ -94,24 +107,9 @@ public class CachedServiceRegistry {
                     DeltaRegistry deltaRegistry = httpSender.fetchDeltaRegistry();
 
                     // 我们这里其实是要大量的修改本地缓存的注册表，所以此处需要加锁
-                    synchronized (registry) {
-                        mergeDeltaRegistry(deltaRegistry.getRecentlyChangedQueue());
-                    }
-
-                    // 再检查一下，跟服务端的注册表的服务实例的数量相比，是否是一致的
-                    // 封装一下增量注册表的对象，也就是拉取增量注册表的时候，一方面是返回那个数据
-                    // 另外一方面，是要那个对应的register-server端的服务实例的数量
-                    Long serverSideTotalCount = deltaRegistry.getServiceInstanceTotalCount();
-
-                    Long clientSideTotalCount = 0L;
-                    for (Map<String, ServiceInstance> serviceInstanceMap : registry.values()) {
-                        clientSideTotalCount += serviceInstanceMap.size();
-                    }
-
-                    if (serverSideTotalCount.compareTo(clientSideTotalCount) != 0) {
-                        // 重新拉取全量注册表进行纠正
-                        registry = httpSender.fetchFullRegistry();
-                    }
+                    mergeDeltaRegistry(deltaRegistry);
+                    // 校对调整注册表
+                    reconcileRegistry(deltaRegistry);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -123,33 +121,72 @@ public class CachedServiceRegistry {
          *
          * @param deltaRegistry
          */
-        private void mergeDeltaRegistry(LinkedList<RecentlyChangedServiceInstance> deltaRegistry) {
-            String serviceName, serviceInstanceId;
-            for (RecentlyChangedServiceInstance recentlyChangedItem : deltaRegistry) {
-                serviceName = recentlyChangedItem.serviceInstance.getServiceName();
-                serviceInstanceId = recentlyChangedItem.serviceInstance.getServiceInstanceId();
-                // 如果是注册操作的话
-                if (ServiceInstanceOperation.REGISTER.equals(recentlyChangedItem.serviceInstanceOperation)) {
-                    Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
-                    if (serviceInstanceMap == null) {
-                        serviceInstanceMap = new HashMap<>();
-                        registry.put(serviceName, serviceInstanceMap);
-                    }
+        private void mergeDeltaRegistry(DeltaRegistry deltaRegistry) {
+            synchronized (applications) {
+                Map<String, Map<String, ServiceInstance>> registry = applications.get().getRegistry();
+                LinkedList<RecentlyChangedServiceInstance> recentlyChangedServiceInstances = deltaRegistry.getRecentlyChangedQueue();
+                String serviceName, serviceInstanceId;
+                for (RecentlyChangedServiceInstance recentlyChangedItem : recentlyChangedServiceInstances) {
+                    serviceName = recentlyChangedItem.serviceInstance.getServiceName();
+                    serviceInstanceId = recentlyChangedItem.serviceInstance.getServiceInstanceId();
 
-                    ServiceInstance serviceInstance = serviceInstanceMap.get(serviceInstanceId);
-                    if (serviceInstance == null) {
-                        serviceInstanceMap.put(serviceInstanceId, recentlyChangedItem.serviceInstance);
-                    }
-                } else if (ServiceInstanceOperation.REMOVE.equals(recentlyChangedItem.serviceInstanceOperation)) {
-                    // 删除操作
-                    Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
-                    if (serviceInstanceMap != null) {
-                        serviceInstanceMap.remove(serviceInstanceId);
+                    // 如果是注册操作的话
+                    if (ServiceInstanceOperation.REGISTER.equals(recentlyChangedItem.serviceInstanceOperation)) {
+                        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
+                        if (serviceInstanceMap == null) {
+                            serviceInstanceMap = new HashMap<>();
+                            registry.put(serviceName, serviceInstanceMap);
+                        }
+
+                        ServiceInstance serviceInstance = serviceInstanceMap.get(serviceInstanceId);
+                        if (serviceInstance == null) {
+                            serviceInstanceMap.put(serviceInstanceId, recentlyChangedItem.serviceInstance);
+                        }
+                    } else if (ServiceInstanceOperation.REMOVE.equals(recentlyChangedItem.serviceInstanceOperation)) {
+                        // 删除操作
+                        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
+                        if (serviceInstanceMap != null) {
+                            serviceInstanceMap.remove(serviceInstanceId);
+                        }
                     }
                 }
             }
         }
 
+        /**
+         * 校对调整注册表
+         *
+         * @param deltaRegistry
+         */
+        private void reconcileRegistry(DeltaRegistry deltaRegistry) {
+            // 再检查一下，跟服务端的注册表的服务实例的数量相比，是否是一致的
+            // 封装一下增量注册表的对象，也就是拉取增量注册表的时候，一方面是返回那个数据
+            // 另外一方面，是要那个对应的register-server端的服务实例的数量
+            Long serverSideTotalCount = deltaRegistry.getServiceInstanceTotalCount();
+
+            Long clientSideTotalCount = 0L;
+            for (Map<String, ServiceInstance> serviceInstanceMap : applications.get().getRegistry().values()) {
+                clientSideTotalCount += serviceInstanceMap.size();
+            }
+
+            if (serverSideTotalCount.compareTo(clientSideTotalCount) != 0) {
+                // 重新拉取全量注册表进行纠正
+                Applications fetchedApplications = httpSender.fetchFullRegistry();
+
+                while (true) {
+                    // 客户端缓存的实例
+                    Applications expectedApplications = applications.get();
+
+                    /**
+                     * 用本地的AtomicReference和它里面取出来的值做CAS比较,如果引用对象是同一个,说明没有其它线程更改过,
+                     * 那么就把引用对象更新为刚刚拉取到的实例-fetchedApplications,退出循环
+                     */
+                    if (applications.compareAndSet(expectedApplications, fetchedApplications)) {
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -172,14 +209,13 @@ public class CachedServiceRegistry {
      * @return
      */
     public Map<String, Map<String, ServiceInstance>> getRegistry() {
-        return registry;
+        return applications.get().getRegistry();
     }
 
     /**
      * 最近变更的实例信息
      */
     static class RecentlyChangedServiceInstance {
-
         /**
          * 服务实例
          */
@@ -201,8 +237,9 @@ public class CachedServiceRegistry {
 
         @Override
         public String toString() {
-            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance + ", changedTimestamp="
-                    + changedTimestamp + ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
+            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance +
+                    ", changedTimestamp=" + changedTimestamp +
+                    ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
         }
     }
 

@@ -54,7 +54,7 @@ public class HttpSender {
      *
      * @return
      */
-    public Map<String, Map<String, ServiceInstance>> fetchFullRegistry() {
+    public Applications fetchFullRegistry() {
         Map<String, Map<String, ServiceInstance>> registry = new HashMap<>();
 
         ServiceInstance serviceInstance = new ServiceInstance();
@@ -64,14 +64,14 @@ public class HttpSender {
         serviceInstance.setServiceInstanceId("FINANCE-SERVICE-192.168.31.207:9000");
         serviceInstance.setServiceName("FINANCE-SERVICE");
 
-        Map<String, ServiceInstance> serviceInstances = new HashMap<String, ServiceInstance>();
+        Map<String, ServiceInstance> serviceInstances = new HashMap<>();
         serviceInstances.put("FINANCE-SERVICE-192.168.31.207:9000", serviceInstance);
 
         registry.put("FINANCE-SERVICE", serviceInstances);
 
         System.out.println("拉取注册表：" + registry);
 
-        return registry;
+        return new Applications(registry);
     }
 
     /**
