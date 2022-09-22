@@ -301,4 +301,19 @@ Java 8提供的一个对AtomicLong改进后的一个类:LongAdder.
 
 当需要get LongAdder的值的时候会将各个cell的值和base的值累加到一起返回.
 
+### 19.AQS
+AQS:AbstractQueuedSynchronizer,抽象队列同步器,是java并发包各种并发工具(锁、同步器)的底层的基础性的组件.AQS里关键的一些东西,
+一个是Node(自定义数据结构,可以组成一个双向链表,也就是所谓的一个队列),state(核心变量,加锁、释放锁都是基于state来完成的,CAS)
 
+ReentrantLock、ReadWriteReentrantLock,锁API底层都是基于AQS来实现的,一般不直接使用,但是是属于java并发包里的底层的API,
+专门支撑各种java并发类的底层的逻辑实现
+
+
+![img.png](zimgs/aqs.png)
+
+可以认为AQS中有一个state状态、一个线程等待的队列、当前加锁线程的标记
+1.当线程1利用ReentrantLock加锁时,会通过CAS将state状态修改为1,同时将独占锁exclusiveOwnerThread(AbstractOwnableSynchronizer)
+设置为当前线程.PS:会利用state和exclusiveOwnerThread判断是否是重入过程
+2.假设线程1还没释放锁,线程2也过来加锁,获取到状态为1,加锁失败,线程2会进入队列等待
+3.当线程1释放锁以后,会将状态改为0,将当前加锁线程标记为空,同时唤醒队列中等待的一个线程.
+4.当线程2被唤醒以后回去尝试加锁,此时就和线程1第一次加锁的过程一样了
