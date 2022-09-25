@@ -1,5 +1,7 @@
 package com.mobei.register.server;
 
+import com.mobei.register.server.ServiceRegistryCache.CacheKey;
+
 /**
  * 负责接受client发送过来的请求,spring cloud eureka中用的组件是jersey
  *
@@ -9,7 +11,14 @@ package com.mobei.register.server;
  */
 public class RegisterServerController {
 
+    /**
+     * 服务注册表
+     */
     private ServiceRegistry registry = ServiceRegistry.getInstance();
+    /**
+     * 服务注册表的缓存
+     */
+    private ServiceRegistryCache registryCache = ServiceRegistryCache.getInstance();
 
     /**
      * 服务注册
@@ -35,9 +44,13 @@ public class RegisterServerController {
             synchronized (SelfProtectionPolicy.class) {
                 SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
                 long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
+
+                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
                 selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
             }
+
+            // 过期掉注册表缓存
+            registryCache.invalidate();
 
             registerResponse.setStatus(RegisterResponse.SUCCESS);
         } catch (Exception e) {
@@ -59,9 +72,13 @@ public class RegisterServerController {
         synchronized (SelfProtectionPolicy.class) {
             SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
             long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-            selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
+
+            selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
             selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
         }
+
+        // 过期掉注册表缓存
+        registryCache.invalidate();
     }
 
     /**
@@ -74,6 +91,7 @@ public class RegisterServerController {
         HeartbeatResponse heartbeatResponse = new HeartbeatResponse();
 
         try {
+            // 获取服务实例
             ServiceInstance serviceInstance = registry.getServiceInstance(
                     heartbeatRequest.getServiceName(), heartbeatRequest.getServiceInstanceId());
             if (serviceInstance != null) {
@@ -99,12 +117,7 @@ public class RegisterServerController {
      * @return
      */
     public Applications fetchFullRegistry() {
-        try {
-            registry.readLock();
-            return new Applications(registry.getRegistry());
-        } finally {
-            registry.readUnlock();
-        }
+        return (Applications) registryCache.get(CacheKey.FULL_SERVICE_REGISTRY);
     }
 
     /**
@@ -113,12 +126,7 @@ public class RegisterServerController {
      * @return
      */
     public DeltaRegistry fetchDeltaRegistry() {
-        try {
-            registry.readLock();
-            return registry.getDeltaRegistry();
-        } finally {
-            registry.readUnlock();
-        }
+        return (DeltaRegistry) registryCache.get(CacheKey.DELTA_SERVICE_REGISTRY);
     }
 
 }

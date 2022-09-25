@@ -31,13 +31,11 @@ public class ServiceRegistry {
      * Map：key是服务名称，value是这个服务的所有的服务实例
      * Map<String, ServiceInstance>：key是服务实例id，value是服务实例的信息
      */
-    private Map<String, Map<String, ServiceInstance>> registry =
-            new HashMap<>();
+    private Map<String, Map<String, ServiceInstance>> registry = new HashMap<>();
     /**
      * 最近变更的服务实例的队列
      */
-    private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue =
-            new LinkedList<RecentlyChangedServiceInstance>();
+    private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue = new LinkedList<>();
     /**
      * 服务注册表的锁
      */
@@ -119,8 +117,7 @@ public class ServiceRegistry {
                 serviceInstanceMap = new HashMap<>();
                 registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
             }
-            serviceInstanceMap.put(serviceInstance.getServiceInstanceId(),
-                    serviceInstance);
+            serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
 
             System.out.println("注册表：" + registry);
         } finally {

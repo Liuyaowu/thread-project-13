@@ -24,10 +24,6 @@ public class ServiceAliveMonitor {
     private Daemon daemon;
 
     public ServiceAliveMonitor() {
-//		ThreadGroup daemonThreadGroup = new ThreadGroup("daemon");
-//		System.out.println("daemon线程组的父线程组是：" + daemonThreadGroup.getParent());
-//		this.daemon = new Daemon(daemonThreadGroup, "ServiceAliveMonitor");
-
         this.daemon = new Daemon();
         // 只要设置了这个标志位，就代表这个线程是一个daemon线程，后台线程
         // 非daemon线程，我们一般叫做工作线程
@@ -92,12 +88,18 @@ public class ServiceAliveMonitor {
                     for (ServiceInstance serviceInstance : removingServiceInstances) {
                         registry.remove(serviceInstance.getServiceName(), serviceInstance.getServiceInstanceId());
 
-                        long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
                         // 更新自我保护机制的阈值
                         synchronized (SelfProtectionPolicy.class) {
+                            long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
                             selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
                             selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
                         }
+                    }
+
+                    // 过期注册表缓存
+                    if (removingServiceInstances.size() != 0) {
+                        // 过期掉注册表缓存
+                        ServiceRegistryCache.getInstance().invalidate();
                     }
 
                     Thread.sleep(CHECK_ALIVE_INTERVAL);
