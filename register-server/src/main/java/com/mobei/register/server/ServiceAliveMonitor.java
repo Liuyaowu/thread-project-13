@@ -1,5 +1,7 @@
 package com.mobei.register.server;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -12,34 +14,32 @@ import java.util.Map;
 public class ServiceAliveMonitor {
 
     /**
-     * 检查服务实例是否存活的周期
+     * 检查服务实例是否存活的间隔
      */
-    public static final Long CHECK_ALIVE_INTERVAL = 60 * 1000L;
+    private static final Long CHECK_ALIVE_INTERVAL = 60 * 1000L;
 
+    /**
+     * 负责监控微服务存活状态的后台线程
+     */
     private Daemon daemon;
 
     public ServiceAliveMonitor() {
-        ThreadGroup daemonThreadGroup = new ThreadGroup("daemon");
+//		ThreadGroup daemonThreadGroup = new ThreadGroup("daemon");
+//		System.out.println("daemon线程组的父线程组是：" + daemonThreadGroup.getParent());
+//		this.daemon = new Daemon(daemonThreadGroup, "ServiceAliveMonitor");
 
-        this.daemon = new Daemon(daemonThreadGroup, "ServiceAliveMonitor");
-
-        /**
-         * 设置为守护线程(后台线程)
-         *
-         * 守护线程:不会阻止JVM进程退出,会跟着JVM一起结束.不设置的话默认为工作线程,只要线程没结束JVM就不会退出
-         */
+        this.daemon = new Daemon();
+        // 只要设置了这个标志位，就代表这个线程是一个daemon线程，后台线程
+        // 非daemon线程，我们一般叫做工作线程
+        // 如果工作线程（main线程）都结束了，daemon线程是不会阻止jvm进程退出的
+        // daemon线程会跟着jvm进程一起退出
         daemon.setDaemon(true);
-        /**
-         * 设置线程名称
-         */
-//        daemon.setName("ServiceAliveMonitor");
-
-        /**
-         * 设置优先级,并没什么用
-         */
-        daemon.setPriority(10);
+        daemon.setName("ServiceAliveMonitor");
     }
 
+    /**
+     * 启动后台线程
+     */
     public void start() {
         daemon.start();
     }
@@ -51,13 +51,9 @@ public class ServiceAliveMonitor {
 
         private ServiceRegistry registry = ServiceRegistry.getInstance();
 
-        public Daemon(ThreadGroup daemonThreadGroup, String threadName) {
-            super(daemonThreadGroup, threadName);
-        }
-
         @Override
         public void run() {
-            Map<String, Map<String, ServiceInstance>> registryMap = null;
+            Map<String, Map<String, ServiceInstance>> registryMap;
 
             while (true) {
                 try {
@@ -68,24 +64,39 @@ public class ServiceAliveMonitor {
                         continue;
                     }
 
-                    registryMap = registry.getRegistry();
+                    // 定义要删除的服务实例的集合
+                    List<ServiceInstance> removingServiceInstances = new ArrayList<>();
 
-                    for (String serviceName : registryMap.keySet()) {
-                        Map<String, ServiceInstance> serviceInstanceMap = registryMap.get(serviceName);
+                    // 开始读服务注册表的数据，这个过程中，别人可以读，但是不可以写
+                    try {
+                        // 对整个服务注册表，加读锁
+                        registry.readLock();
 
-                        for (ServiceInstance serviceInstance : serviceInstanceMap.values()) {
-                            /**
-                             * 说明服务实例距离上一次发送心跳已经超过90秒了,认为这个服务就死了,从注册表中摘除这个服务实例
-                             */
-                            if (!serviceInstance.isAlive()) {
-                                registry.remove(serviceName, serviceInstance.getServiceInstanceId());
-                                long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-                                // 更新自我保护机制的阈值
-                                synchronized (SelfProtectionPolicy.class) {
-                                    selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
-                                    selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+                        registryMap = registry.getRegistry();
+                        for (String serviceName : registryMap.keySet()) {
+                            Map<String, ServiceInstance> serviceInstanceMap = registryMap.get(serviceName);
+                            for (ServiceInstance serviceInstance : serviceInstanceMap.values()) {
+                                // 说明服务实例距离上一次发送心跳已经超过90秒了
+                                // 认为这个服务就死了
+                                // 从注册表中摘除这个服务实例
+                                if (!serviceInstance.isAlive()) {
+                                    removingServiceInstances.add(serviceInstance);
                                 }
                             }
+                        }
+                    } finally {
+                        registry.readUnlock();
+                    }
+
+                    // 将所有的要删除的服务实例，从服务注册表删除
+                    for (ServiceInstance serviceInstance : removingServiceInstances) {
+                        registry.remove(serviceInstance.getServiceName(), serviceInstance.getServiceInstanceId());
+
+                        long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
+                        // 更新自我保护机制的阈值
+                        synchronized (SelfProtectionPolicy.class) {
+                            selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
+                            selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
                         }
                     }
 

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * 服务注册表
@@ -19,17 +20,30 @@ public class ServiceRegistry {
     public static final Long RECENTLY_CHANGED_ITEM_CHECK_INTERVAL = 3000L;
     public static final Long RECENTLY_CHANGED_ITEM_EXPIRED = 3 * 60 * 1000L;
 
+    /**
+     * 注册表是一个单例
+     */
     private static ServiceRegistry instance = new ServiceRegistry();
 
     /**
-     * 注册表: 服务名称 -> (服务实例id -> 服务实例)
+     * 核心的内存数据结构：注册表
+     * <p>
+     * Map：key是服务名称，value是这个服务的所有的服务实例
+     * Map<String, ServiceInstance>：key是服务实例id，value是服务实例的信息
      */
-    private Map<String, Map<String, ServiceInstance>> registry = new HashMap<>();
-
+    private Map<String, Map<String, ServiceInstance>> registry =
+            new HashMap<>();
     /**
      * 最近变更的服务实例的队列
      */
-    private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue = new LinkedList<>();
+    private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue =
+            new LinkedList<RecentlyChangedServiceInstance>();
+    /**
+     * 服务注册表的锁
+     */
+    private ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private ReentrantReadWriteLock.ReadLock readLock = lock.readLock();
+    private ReentrantReadWriteLock.WriteLock writeLock = lock.writeLock();
 
     /**
      * 构造函数
@@ -42,31 +56,111 @@ public class ServiceRegistry {
     }
 
     /**
+     * 获取服务注册表的单例实例
+     *
+     * @return
+     */
+    public static ServiceRegistry getInstance() {
+        return instance;
+    }
+
+    /**
+     * 加读锁
+     */
+    public void readLock() {
+        this.readLock.lock();
+    }
+
+    /**
+     * 释放读锁
+     */
+    public void readUnlock() {
+        this.readLock.unlock();
+    }
+
+    /**
+     * 加写锁
+     */
+    public void writeLock() {
+        this.writeLock.lock();
+    }
+
+    /**
+     * 释放写锁
+     */
+    public void writeUnlock() {
+        this.writeLock.unlock();
+    }
+
+    /**
      * 服务注册
      *
      * @param serviceInstance 服务实例
      */
-    public synchronized void register(ServiceInstance serviceInstance) {
-        System.out.println("服务注册......【" + serviceInstance + "】");
+    public void register(ServiceInstance serviceInstance) {
+        try {
+            // 加写锁
+            this.writeLock();
 
-        // 将服务实例放入最近变更的队列中
-        RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
-                serviceInstance,
-                System.currentTimeMillis(),
-                ServiceInstanceOperation.REGISTER);
-        recentlyChangedQueue.offer(recentlyChangedItem);
+            System.out.println("服务注册......【" + serviceInstance + "】");
 
-        System.out.println("最近变更队列：" + recentlyChangedQueue);
+            // 将服务实例放入最近变更的队列中
+            RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
+                    serviceInstance,
+                    System.currentTimeMillis(),
+                    ServiceInstanceOperation.REGISTER);
+            recentlyChangedQueue.offer(recentlyChangedItem);
 
-        // 将服务实例放入注册表中
-        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
-        if (serviceInstanceMap == null) {
-            serviceInstanceMap = new HashMap<>();
-            registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
+            System.out.println("最近变更队列：" + recentlyChangedQueue);
+
+            // 将服务实例放入注册表中
+            Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
+            if (serviceInstanceMap == null) {
+                serviceInstanceMap = new HashMap<>();
+                registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
+            }
+            serviceInstanceMap.put(serviceInstance.getServiceInstanceId(),
+                    serviceInstance);
+
+            System.out.println("注册表：" + registry);
+        } finally {
+            this.writeUnlock();
         }
-        serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
+    }
 
-        System.out.println("注册表：" + registry);
+    /**
+     * 从注册表删除一个服务实例
+     *
+     * @param serviceName
+     * @param serviceInstanceId
+     */
+    public synchronized void remove(String serviceName, String serviceInstanceId) {
+        try {
+            // 加写锁
+            this.writeLock();
+
+            System.out.println("服务摘除【" + serviceName + ", " + serviceInstanceId + "】");
+
+            // 获取服务实例
+            Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
+            ServiceInstance serviceInstance = serviceInstanceMap.get(serviceInstanceId);
+
+            // 将服务实例变更信息放入队列中
+            RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
+                    serviceInstance,
+                    System.currentTimeMillis(),
+                    ServiceInstanceOperation.REMOVE);
+            recentlyChangedQueue.offer(recentlyChangedItem);
+
+            System.out.println("最近变更队列：" + recentlyChangedQueue);
+
+            // 从服务注册表删除服务实例
+            serviceInstanceMap.remove(serviceInstanceId);
+
+            System.out.println("注册表：" + registry);
+        } finally {
+            this.writeUnlock();
+        }
     }
 
     /**
@@ -76,9 +170,14 @@ public class ServiceRegistry {
      * @param serviceInstanceId 服务实例id
      * @return 服务实例
      */
-    public synchronized ServiceInstance getServiceInstance(String serviceName, String serviceInstanceId) {
-        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
-        return serviceInstanceMap.get(serviceInstanceId);
+    public ServiceInstance getServiceInstance(String serviceName, String serviceInstanceId) {
+        try {
+            this.readLock();
+            Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
+            return serviceInstanceMap.get(serviceInstanceId);
+        } finally {
+            this.readUnlock();
+        }
     }
 
     /**
@@ -86,7 +185,7 @@ public class ServiceRegistry {
      *
      * @return
      */
-    public synchronized Map<String, Map<String, ServiceInstance>> getRegistry() {
+    public Map<String, Map<String, ServiceInstance>> getRegistry() {
         return registry;
     }
 
@@ -95,7 +194,7 @@ public class ServiceRegistry {
      *
      * @return
      */
-    public synchronized DeltaRegistry getDeltaRegistry() {
+    public DeltaRegistry getDeltaRegistry() {
         Long totalCount = 0L;
         for (Map<String, ServiceInstance> serviceInstanceMap : registry.values()) {
             totalCount += serviceInstanceMap.size();
@@ -107,47 +206,9 @@ public class ServiceRegistry {
     }
 
     /**
-     * 从注册表删除一个服务实例
-     *
-     * @param serviceName
-     * @param serviceInstanceId
-     */
-    public synchronized void remove(String serviceName, String serviceInstanceId) {
-        System.out.println("服务摘除【" + serviceName + ", " + serviceInstanceId + "】");
-
-        // 获取服务实例
-        Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceName);
-        ServiceInstance serviceInstance = serviceInstanceMap.get(serviceInstanceId);
-
-        // 将服务实例变更信息放入队列中
-        RecentlyChangedServiceInstance recentlyChangedItem = new RecentlyChangedServiceInstance(
-                serviceInstance,
-                System.currentTimeMillis(),
-                ServiceInstanceOperation.REMOVE);
-        recentlyChangedQueue.offer(recentlyChangedItem);
-
-        System.out.println("最近变更队列：" + recentlyChangedQueue);
-
-        // 从服务注册表删除服务实例
-        serviceInstanceMap.remove(serviceInstanceId);
-
-        System.out.println("注册表：" + registry);
-    }
-
-    /**
-     * 获取服务注册表的单例实例
-     *
-     * @return
-     */
-    public static ServiceRegistry getInstance() {
-        return instance;
-    }
-
-    /**
      * 最近变化的服务实例
      */
     class RecentlyChangedServiceInstance {
-
         /**
          * 服务实例
          */
@@ -161,10 +222,9 @@ public class ServiceRegistry {
          */
         String serviceInstanceOperation;
 
-        public RecentlyChangedServiceInstance(
-                ServiceInstance serviceInstance,
-                Long changedTimestamp,
-                String serviceInstanceOperation) {
+        public RecentlyChangedServiceInstance(ServiceInstance serviceInstance,
+                                              Long changedTimestamp,
+                                              String serviceInstanceOperation) {
             this.serviceInstance = serviceInstance;
             this.changedTimestamp = changedTimestamp;
             this.serviceInstanceOperation = serviceInstanceOperation;
@@ -172,8 +232,9 @@ public class ServiceRegistry {
 
         @Override
         public String toString() {
-            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance + ", changedTimestamp="
-                    + changedTimestamp + ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
+            return "RecentlyChangedServiceInstance [serviceInstance=" + serviceInstance
+                    + ", changedTimestamp=" + changedTimestamp
+                    + ", serviceInstanceOperation=" + serviceInstanceOperation + "]";
         }
 
     }
@@ -201,7 +262,7 @@ public class ServiceRegistry {
             while (true) {
                 try {
                     synchronized (instance) {
-                        RecentlyChangedServiceInstance recentlyChangedItem;
+                        RecentlyChangedServiceInstance recentlyChangedItem = null;
                         Long currentTimestamp = System.currentTimeMillis();
 
                         while ((recentlyChangedItem = recentlyChangedQueue.peek()) != null) {

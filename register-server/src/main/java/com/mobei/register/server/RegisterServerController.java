@@ -34,14 +34,8 @@ public class RegisterServerController {
             // 更新自我保护机制的阈值
             synchronized (SelfProtectionPolicy.class) {
                 SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
-
-                /**
-                 * 期待每分钟心跳次数:30秒一次心跳,那么每注册一个服务实例的话,服务注册中心每分钟接收到的心跳次数应该加2
-                 *
-                 * todo 这里硬编码了,正常来说心跳次数是可以调整的,那么每分钟的心跳次数应该是动态计算的
-                 */
                 long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
+                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
                 selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
             }
 
@@ -52,52 +46,6 @@ public class RegisterServerController {
         }
 
         return registerResponse;
-    }
-
-    /**
-     * 发送心跳
-     *
-     * @param heartbeatRequest 心跳请求
-     * @return 心跳响应
-     */
-    public HeartbeatResponse heartbeat(HeartbeatRequest heartbeatRequest) {
-        HeartbeatResponse heartbeatResponse = new HeartbeatResponse();
-
-        try {
-            // 对服务实例进行续约
-            ServiceInstance serviceInstance = registry.getServiceInstance(
-                    heartbeatRequest.getServiceName(), heartbeatRequest.getServiceInstanceId());
-            serviceInstance.renew();
-
-            // 记录一下每分钟的心跳的次数
-            HeartbeatCounter heartbeatCounter = HeartbeatCounter.getInstance();
-            heartbeatCounter.increment();
-
-            heartbeatResponse.setStatus(HeartbeatResponse.SUCCESS);
-        } catch (Exception e) {
-            e.printStackTrace();
-            heartbeatResponse.setStatus(HeartbeatResponse.FAILURE);
-        }
-
-        return heartbeatResponse;
-    }
-
-    /**
-     * 拉取全量注册表
-     *
-     * @return
-     */
-    public Applications fetchFullServiceRegistry() {
-        return new Applications(registry.getRegistry());
-    }
-
-    /**
-     * 拉取增量注册表
-     *
-     * @return
-     */
-    public DeltaRegistry fetchDeltaServiceRegistry() {
-        return registry.getDeltaRegistry();
     }
 
     /**
@@ -113,6 +61,63 @@ public class RegisterServerController {
             long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
             selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate - 2);
             selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+        }
+    }
+
+    /**
+     * 发送心跳
+     *
+     * @param heartbeatRequest 心跳请求
+     * @return 心跳响应
+     */
+    public HeartbeatResponse heartbeat(HeartbeatRequest heartbeatRequest) {
+        HeartbeatResponse heartbeatResponse = new HeartbeatResponse();
+
+        try {
+            ServiceInstance serviceInstance = registry.getServiceInstance(
+                    heartbeatRequest.getServiceName(), heartbeatRequest.getServiceInstanceId());
+            if (serviceInstance != null) {
+                serviceInstance.renew();
+            }
+
+            // 记录一下每分钟的心跳的次数
+            HeartbeatCounter heartbeatMessuredRate = HeartbeatCounter.getInstance();
+            heartbeatMessuredRate.increment();
+
+            heartbeatResponse.setStatus(HeartbeatResponse.SUCCESS);
+        } catch (Exception e) {
+            e.printStackTrace();
+            heartbeatResponse.setStatus(HeartbeatResponse.FAILURE);
+        }
+
+        return heartbeatResponse;
+    }
+
+    /**
+     * 拉取全量注册表
+     *
+     * @return
+     */
+    public Applications fetchFullRegistry() {
+        try {
+            registry.readLock();
+            return new Applications(registry.getRegistry());
+        } finally {
+            registry.readUnlock();
+        }
+    }
+
+    /**
+     * 拉取增量注册表
+     *
+     * @return
+     */
+    public DeltaRegistry fetchDeltaRegistry() {
+        try {
+            registry.readLock();
+            return registry.getDeltaRegistry();
+        } finally {
+            registry.readUnlock();
         }
     }
 
