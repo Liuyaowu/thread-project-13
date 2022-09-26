@@ -22,22 +22,6 @@ public class ServiceRegistryCache {
      * 缓存数据同步间隔
      */
     private static final Long CACHE_MAP_SYNC_INTERVAL = 30 * 1000L;
-    /**
-     * 只读缓存
-     */
-    private Map<String, Object> readOnlyMap = new HashMap<>();
-    /**
-     * 读写缓存
-     */
-    private Map<String, Object> readWriteMap = new HashMap<>();
-    /**
-     * cache map同步后台线程
-     */
-    private CacheMapSyncDaemon cacheMapSyncDaemon;
-    /**
-     * 内部锁
-     */
-    private Object lock = new Object();
 
     /**
      * 缓存key
@@ -57,7 +41,22 @@ public class ServiceRegistryCache {
      * 注册表数据
      */
     private ServiceRegistry registry = ServiceRegistry.getInstance();
-
+    /**
+     * 只读缓存
+     */
+    private Map<String, Object> readOnlyMap = new HashMap<>();
+    /**
+     * 读写缓存
+     */
+    private Map<String, Object> readWriteMap = new HashMap<>();
+    /**
+     * cache map同步后台线程
+     */
+    private CacheMapSyncDaemon cacheMapSyncDaemon;
+    /**
+     * 内部锁
+     */
+    private Object lock = new Object();
     /**
      * 对readOnlyMap的读写锁
      */
@@ -153,23 +152,18 @@ public class ServiceRegistryCache {
         public void run() {
             while (true) {
                 try {
-                    synchronized (lock) {
-                        if (readWriteMap.get(CacheKey.FULL_SERVICE_REGISTRY) == null) {
-                            writeLock.lock();
-                            try {
+                    writeLock.lock();
+                    try {
+                        synchronized (lock) {
+                            if (readWriteMap.get(CacheKey.FULL_SERVICE_REGISTRY) == null) {
                                 readOnlyMap.put(CacheKey.FULL_SERVICE_REGISTRY, null);
-                            } finally {
-                                writeLock.unlock();
                             }
-                        }
-                        if (readWriteMap.get(CacheKey.DELTA_SERVICE_REGISTRY) == null) {
-                            writeLock.lock();
-                            try {
+                            if (readWriteMap.get(CacheKey.DELTA_SERVICE_REGISTRY) == null) {
                                 readOnlyMap.put(CacheKey.DELTA_SERVICE_REGISTRY, null);
-                            } finally {
-                                writeLock.unlock();
                             }
                         }
+                    } finally {
+                        writeLock.unlock();
                     }
 
                     Thread.sleep(CACHE_MAP_SYNC_INTERVAL);
