@@ -1,4 +1,4 @@
-package com.mobei.dfs;
+package com.mobei.dfs.namenode.server;
 
 import java.util.LinkedList;
 import java.util.List;

@@ -1,4 +1,4 @@
-package com.mobei.dfs;
+package com.mobei.dfs.namenode.server;
 
 /**
  * NameNode的rpc服务的接口

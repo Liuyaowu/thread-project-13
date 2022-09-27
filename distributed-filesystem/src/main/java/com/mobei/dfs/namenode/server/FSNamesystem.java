@@ -1,4 +1,4 @@
-package com.mobei.dfs;
+package com.mobei.dfs.namenode.server;
 
 /**
  * 负责管理元数据的核心组件

@@ -1,4 +1,4 @@
-package com.mobei.dfs;
+package com.mobei.dfs.namenode.server;
 
 /**
  * NameNode核心启动类
