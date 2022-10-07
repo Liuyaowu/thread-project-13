@@ -1,5 +1,6 @@
 package com.mobei.dfs.datanode.server;
 
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -19,6 +20,10 @@ public class NameNodeGroupOfferService {
      * 负责跟NameNode备节点通信的ServiceActor组件
      */
     private NameNodeServiceActor standbyServiceActor;
+    /**
+     * 该datanode上保存的ServiceActor列表
+     */
+    private CopyOnWriteArrayList<NameNodeServiceActor> serviceActors;
 
     /**
      * 构造函数
@@ -26,6 +31,10 @@ public class NameNodeGroupOfferService {
     public NameNodeGroupOfferService() {
         this.activeServiceActor = new NameNodeServiceActor();
         this.standbyServiceActor = new NameNodeServiceActor();
+
+        this.serviceActors = new CopyOnWriteArrayList<>();
+        this.serviceActors.add(activeServiceActor);
+        this.serviceActors.add(standbyServiceActor);
     }
 
     /**
@@ -34,6 +43,15 @@ public class NameNodeGroupOfferService {
     public void start() {
         // 直接使用两个ServiceActor组件分别向主备两个NameNode节点进行注册
         register();
+    }
+
+    /**
+     * 关闭指定的ServiceActor
+     *
+     * @param serviceActor
+     */
+    public void shutdown(NameNodeServiceActor serviceActor) {
+        this.serviceActors.remove(serviceActor);
     }
 
     /**

@@ -2,7 +2,7 @@ package com.mobei.register.server;
 
 import com.mobei.register.server.ServiceRegistry.RecentlyChangedServiceInstance;
 
-import java.util.LinkedList;
+import java.util.Queue;
 
 /**
  * 增量注册表
@@ -13,20 +13,20 @@ import java.util.LinkedList;
  */
 public class DeltaRegistry {
 
-    private LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue;
+    private Queue<RecentlyChangedServiceInstance> recentlyChangedQueue;
     private Long serviceInstanceTotalCount;
 
-    public DeltaRegistry(LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue,
+    public DeltaRegistry(Queue<RecentlyChangedServiceInstance> recentlyChangedQueue,
                          Long serviceInstanceTotalCount) {
         this.recentlyChangedQueue = recentlyChangedQueue;
         this.serviceInstanceTotalCount = serviceInstanceTotalCount;
     }
 
-    public LinkedList<RecentlyChangedServiceInstance> getRecentlyChangedQueue() {
+    public Queue<RecentlyChangedServiceInstance> getRecentlyChangedQueue() {
         return recentlyChangedQueue;
     }
 
-    public void setRecentlyChangedQueue(LinkedList<RecentlyChangedServiceInstance> recentlyChangedQueue) {
+    public void setRecentlyChangedQueue(Queue<RecentlyChangedServiceInstance> recentlyChangedQueue) {
         this.recentlyChangedQueue = recentlyChangedQueue;
     }
 

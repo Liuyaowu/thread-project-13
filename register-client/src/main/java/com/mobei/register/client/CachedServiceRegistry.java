@@ -1,8 +1,8 @@
 package com.mobei.register.client;
 
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicStampedReference;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -167,7 +167,7 @@ public class CachedServiceRegistry {
             try {
                 writeLock.lock();
                 Map<String, Map<String, ServiceInstance>> registry = asrApplications.getReference().getRegistry();
-                LinkedList<RecentlyChangedServiceInstance> recentlyChangedServiceInstances = deltaRegistry.getRecentlyChangedQueue();
+                Queue<RecentlyChangedServiceInstance> recentlyChangedServiceInstances = deltaRegistry.getRecentlyChangedQueue();
                 String serviceName, serviceInstanceId;
                 for (RecentlyChangedServiceInstance recentlyChangedItem : recentlyChangedServiceInstances) {
                     serviceName = recentlyChangedItem.serviceInstance.getServiceName();
