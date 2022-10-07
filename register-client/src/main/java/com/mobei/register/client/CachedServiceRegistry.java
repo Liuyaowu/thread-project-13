@@ -5,6 +5,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicStampedReference;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * 客户端缓存的注册中心的注册表
@@ -39,6 +40,12 @@ public class CachedServiceRegistry {
      * 代表了当前的本地缓存的服务注册表的一个版本号
      */
     private AtomicLong applicationsVersion = new AtomicLong(0L);
+    /**
+     * 本地缓存注册表读写锁
+     */
+    private ReentrantReadWriteLock applicationsLock = new ReentrantReadWriteLock();
+    private ReentrantReadWriteLock.WriteLock writeLock = applicationsLock.writeLock();
+    private ReentrantReadWriteLock.ReadLock readLock = applicationsLock.readLock();
 
     /**
      * 构造函数
@@ -120,7 +127,6 @@ public class CachedServiceRegistry {
      * 增量拉取注册表的后台线程
      */
     private class FetchDeltaRegistryWorker extends Thread {
-
         @Override
         public void run() {
             while (registerClient.isRunning()) {
@@ -158,7 +164,8 @@ public class CachedServiceRegistry {
          * @param deltaRegistry
          */
         private void mergeDeltaRegistry(DeltaRegistry deltaRegistry) {
-            synchronized (asrApplications) {
+            try {
+                writeLock.lock();
                 Map<String, Map<String, ServiceInstance>> registry = asrApplications.getReference().getRegistry();
                 LinkedList<RecentlyChangedServiceInstance> recentlyChangedServiceInstances = deltaRegistry.getRecentlyChangedQueue();
                 String serviceName, serviceInstanceId;
@@ -186,6 +193,8 @@ public class CachedServiceRegistry {
                         }
                     }
                 }
+            } finally {
+                writeLock.unlock();
             }
         }
 
@@ -250,7 +259,12 @@ public class CachedServiceRegistry {
      * @return
      */
     public Map<String, Map<String, ServiceInstance>> getRegistry() {
-        return asrApplications.getReference().getRegistry();
+        try {
+            readLock.lock();
+            return asrApplications.getReference().getRegistry();
+        } finally {
+            readLock.unlock();
+        }
     }
 
     /**

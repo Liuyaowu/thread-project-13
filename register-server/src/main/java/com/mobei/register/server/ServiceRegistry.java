@@ -2,9 +2,9 @@ package com.mobei.register.server;
 
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -31,7 +31,7 @@ public class ServiceRegistry {
      * Map：key是服务名称，value是这个服务的所有的服务实例
      * Map<String, ServiceInstance>：key是服务实例id，value是服务实例的信息
      */
-    private Map<String, Map<String, ServiceInstance>> registry = new HashMap<>();
+    private Map<String, Map<String, ServiceInstance>> registry = new ConcurrentHashMap<>();
     /**
      * 最近变更的服务实例的队列
      */
@@ -114,7 +114,7 @@ public class ServiceRegistry {
             // 将服务实例放入注册表中
             Map<String, ServiceInstance> serviceInstanceMap = registry.get(serviceInstance.getServiceName());
             if (serviceInstanceMap == null) {
-                serviceInstanceMap = new HashMap<>();
+                serviceInstanceMap = new ConcurrentHashMap<>();
                 registry.put(serviceInstance.getServiceName(), serviceInstanceMap);
             }
             serviceInstanceMap.put(serviceInstance.getServiceInstanceId(), serviceInstance);
@@ -259,7 +259,7 @@ public class ServiceRegistry {
             while (true) {
                 try {
                     synchronized (instance) {
-                        RecentlyChangedServiceInstance recentlyChangedItem = null;
+                        RecentlyChangedServiceInstance recentlyChangedItem;
                         Long currentTimestamp = System.currentTimeMillis();
 
                         while ((recentlyChangedItem = recentlyChangedQueue.peek()) != null) {
