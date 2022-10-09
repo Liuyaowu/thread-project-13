@@ -7,30 +7,56 @@ public class ReentractLockDemo {
     static int data = 0;
     static ReentrantLock lock = new ReentrantLock();
 
-    public static void main(String[] args) {
-        new Thread(() -> {
-            for (int i = 0; i < 10; i++) {
+    public static void main(String[] args) throws Exception {
+        Thread t1 = new Thread(() -> {
+            for (int i = 0; i < 100000; i++) {
                 lock.lock();
                 try {
-                    ReentractLockDemo.data++;
-                    System.out.println(ReentractLockDemo.data);
-                } finally {
+                    data++;
+//                    System.out.println(ReentractLockDemo.data);
+//                    Thread.sleep(2000);
+                } /*catch (InterruptedException e) {
+                    e.printStackTrace();
+                }*/ finally {
                     lock.unlock();
                 }
             }
-        }).start();
+        });
+        t1.start();
 
-        new Thread(() -> {
-            for (int i = 0; i < 10; i++) {
+//        Thread.sleep(5000);
+
+        Thread t2 = new Thread(() -> {
+            for (int i = 0; i < 100000; i++) {
                 lock.lock();
                 try {
-                    ReentractLockDemo.data++;
-                    System.out.println(ReentractLockDemo.data);
+                    data++;
+//                    System.out.println(ReentractLockDemo.data);
                 } finally {
                     lock.unlock();
                 }
             }
-        }).start();
+        });
+        t2.start();
+
+        Thread t3 = new Thread(() -> {
+            for (int i = 0; i < 100000; i++) {
+                lock.lock();
+                try {
+                    data++;
+//                    System.out.println(ReentractLockDemo.data);
+                } finally {
+                    lock.unlock();
+                }
+            }
+        });
+        t3.start();
+
+        t1.join();
+        t2.join();
+        t3.join();
+
+        System.out.println(data);
     }
 
 }
