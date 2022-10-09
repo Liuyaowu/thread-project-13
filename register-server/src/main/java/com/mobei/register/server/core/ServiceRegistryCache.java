@@ -1,4 +1,6 @@
-package com.mobei.register.server;
+package com.mobei.register.server.core;
+
+import com.mobei.register.server.web.Applications;
 
 import java.util.HashMap;
 import java.util.Map;

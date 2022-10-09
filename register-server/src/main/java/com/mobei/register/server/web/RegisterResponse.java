@@ -1,22 +1,22 @@
-package com.mobei.register.server;
+package com.mobei.register.server.web;
 
 import lombok.Data;
 
 /**
- * 心跳响应结果
+ * 注册响应
  *
  * @author liuyaowu
- * @date 2022/9/12 22:01
+ * @date 2022/9/12 21:34
  * @remark
  */
 @Data
-public class HeartbeatResponse {
+public class RegisterResponse {
 
     public static final String SUCCESS = "success";
     public static final String FAILURE = "failure";
 
     /**
-     * 心跳响应状态:SUCCESS、FAILURE
+     * 注册响应状态:SUCCESS、FAILURE
      */
     private String status;
 

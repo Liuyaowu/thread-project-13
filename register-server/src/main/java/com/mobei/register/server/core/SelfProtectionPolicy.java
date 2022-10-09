@@ -1,4 +1,4 @@
-package com.mobei.register.server;
+package com.mobei.register.server.core;
 
 /**
  * 自我保护机制

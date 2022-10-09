@@ -1,4 +1,4 @@
-package com.mobei.register.server;
+package com.mobei.register.server.core;
 
 import java.util.ArrayList;
 import java.util.List;

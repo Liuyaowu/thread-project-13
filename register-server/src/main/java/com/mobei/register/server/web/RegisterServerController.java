@@ -1,6 +1,9 @@
-package com.mobei.register.server;
+package com.mobei.register.server.web;
 
-import com.mobei.register.server.ServiceRegistryCache.CacheKey;
+import com.mobei.register.server.cluster.PeersReplicateBatch;
+import com.mobei.register.server.cluster.PeersReplicator;
+import com.mobei.register.server.core.*;
+import com.mobei.register.server.core.ServiceRegistryCache.CacheKey;
 
 /**
  * 负责接受client发送过来的请求,spring cloud eureka中用的组件是jersey
@@ -19,6 +22,10 @@ public class RegisterServerController {
      * 服务注册表的缓存
      */
     private ServiceRegistryCache registryCache = ServiceRegistryCache.getInstance();
+    /**
+     * 集群同步组件
+     */
+    private PeersReplicator peersReplicator = PeersReplicator.getInstance();
 
     /**
      * 服务注册
@@ -43,14 +50,17 @@ public class RegisterServerController {
             // 更新自我保护机制的阈值
             synchronized (SelfProtectionPolicy.class) {
                 SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
-                long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-
-                selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
-                selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+                selfProtectionPolicy.setExpectedHeartbeatRate(
+                        selfProtectionPolicy.getExpectedHeartbeatRate() + 2);
+                selfProtectionPolicy.setExpectedHeartbeatThreshold(
+                        (long) (selfProtectionPolicy.getExpectedHeartbeatRate() * 0.85));
             }
 
             // 过期掉注册表缓存
             registryCache.invalidate();
+
+            // 进行集群同步
+            peersReplicator.replicateRegister(registerRequest);
 
             registerResponse.setStatus(RegisterResponse.SUCCESS);
         } catch (Exception e) {
@@ -64,21 +74,22 @@ public class RegisterServerController {
     /**
      * 服务下线
      */
-    public void cancel(String serviceName, String serviceInstanceId) {
+    public void cancel(CancelRequest cancelRequest) {
         // 从服务注册中摘除实例
-        registry.remove(serviceName, serviceInstanceId);
+        registry.remove(cancelRequest.getServiceName(), cancelRequest.getServiceInstanceId());
 
         // 更新自我保护机制的阈值
         synchronized (SelfProtectionPolicy.class) {
             SelfProtectionPolicy selfProtectionPolicy = SelfProtectionPolicy.getInstance();
-            long expectedHeartbeatRate = selfProtectionPolicy.getExpectedHeartbeatRate();
-
-            selfProtectionPolicy.setExpectedHeartbeatRate(expectedHeartbeatRate + 2);
-            selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (expectedHeartbeatRate * 0.85));
+            selfProtectionPolicy.setExpectedHeartbeatRate(selfProtectionPolicy.getExpectedHeartbeatRate() - 2);
+            selfProtectionPolicy.setExpectedHeartbeatThreshold((long) (selfProtectionPolicy.getExpectedHeartbeatRate() * 0.85));
         }
 
         // 过期掉注册表缓存
         registryCache.invalidate();
+
+        // 进行集群同步
+        peersReplicator.replicateCancel(cancelRequest);
     }
 
     /**
@@ -102,6 +113,9 @@ public class RegisterServerController {
             HeartbeatCounter heartbeatMessuredRate = HeartbeatCounter.getInstance();
             heartbeatMessuredRate.increment();
 
+            // 进行集群同步
+            peersReplicator.replicateHeartbeat(heartbeatRequest);
+
             heartbeatResponse.setStatus(HeartbeatResponse.SUCCESS);
         } catch (Exception e) {
             e.printStackTrace();
@@ -109,6 +123,23 @@ public class RegisterServerController {
         }
 
         return heartbeatResponse;
+    }
+
+    /**
+     * 同步batch数据
+     *
+     * @param batch
+     */
+    public void replicateBatch(PeersReplicateBatch batch) {
+        for (AbstractRequest request : batch.getRequests()) {
+            if (request.getType().equals(AbstractRequest.REGISTER_REQUEST)) {
+                register((RegisterRequest) request);
+            } else if (request.getType().equals(AbstractRequest.CANCEL_REQUEST)) {
+                cancel((CancelRequest) request);
+            } else if (request.getType().equals(AbstractRequest.HEARTBEAT_REQUEST)) {
+                heartbeat((HeartbeatRequest) request);
+            }
+        }
     }
 
     /**

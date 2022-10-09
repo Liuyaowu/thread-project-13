@@ -1,4 +1,4 @@
-package com.mobei.register.server;
+package com.mobei.register.server.web;
 
 import lombok.Data;
 
@@ -10,7 +10,7 @@ import lombok.Data;
  * @remark
  */
 @Data
-public class RegisterRequest {
+public class RegisterRequest extends AbstractRequest {
 
     /**
      * 服务名称

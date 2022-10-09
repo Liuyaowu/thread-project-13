@@ -1,6 +1,6 @@
-package com.mobei.register.server;
+package com.mobei.register.server.core;
 
-import com.mobei.register.server.ServiceRegistry.RecentlyChangedServiceInstance;
+import com.mobei.register.server.core.ServiceRegistry.RecentlyChangedServiceInstance;
 
 import java.util.Queue;
 

@@ -1,4 +1,4 @@
-package com.mobei.register.server;
+package com.mobei.register.server.core;
 
 import lombok.extern.slf4j.Slf4j;
 
