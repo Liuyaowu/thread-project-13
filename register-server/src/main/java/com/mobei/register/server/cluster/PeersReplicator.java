@@ -7,6 +7,8 @@ import com.mobei.register.server.web.RegisterRequest;
 
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -38,19 +40,15 @@ public class PeersReplicator {
     }
 
     /**
-     * 第一层队列：接收请求的高并发写入，无界队列(有界队列可能导致线程全部卡死,一般宁愿内存撑爆也不要让线程卡死导致服务挂掉)
+     * 第一层队列：接收请求的高并发写入，无界队列
      */
     private ConcurrentLinkedQueue<AbstractRequest> acceptorQueue = new ConcurrentLinkedQueue<>();
     /**
-     * 第二层队列：有界队列，用于batch生成,对这个队列的入队和出队操作是少数后台线程在执行,
-     * 并不是大量线程高并发写入的,做成有界的,避免异常情况下过度消耗内存
+     * 第二层队列：有界队列，用于batch生成
      */
     private LinkedBlockingQueue<AbstractRequest> batchQueue = new LinkedBlockingQueue<>(1000000);
     /**
      * 第三层队列：有界队列，用于batch的同步发送
-     * <p>
-     * 每个AbstractRequest会占用多少字节的内存，假设大概来说一个request占用30个字节,
-     * 平均一个batch包含100个request，3000个字节，3kb,10000 -> 30mb
      */
     private LinkedBlockingQueue<PeersReplicateBatch> replicateQueue = new LinkedBlockingQueue<>(10000);
 
@@ -82,6 +80,7 @@ public class PeersReplicator {
      * 负责接收数据以及打包为batch的后台线程
      */
     class AcceptorBatchThread extends Thread {
+
         long latestBatchGeneration = System.currentTimeMillis();
 
         @Override
@@ -125,23 +124,32 @@ public class PeersReplicator {
             }
 
             batchQueue.clear();
+
             return batch;
         }
+
     }
 
     /**
      * 集群同步线程
      */
     class PeersReplicateThread extends Thread {
+
+        ExecutorService threadPool = Executors.newFixedThreadPool(RegisterServerCluster.getPeers().size());
+
         @Override
         public void run() {
             while (true) {
                 try {
                     PeersReplicateBatch batch = replicateQueue.take();
                     if (batch != null) {
-                        // 遍历所有的其他的register-server地址
-                        // 给每个地址的register-server都发送一个http请求同步batch
-                        System.out.println("给所有其他的register-server发送请求，同步batch过去......");
+                        for (String peer : RegisterServerCluster.getPeers()) {
+                            threadPool.execute(() -> {
+                                // 遍历所有的其他的register-server地址
+                                // 给每个地址的register-server都发送一个http请求同步batch
+                                System.out.println("给" + peer + "发送请求，同步batch过去......");
+                            });
+                        }
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
