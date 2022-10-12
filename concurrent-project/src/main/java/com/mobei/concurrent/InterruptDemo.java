@@ -65,7 +65,7 @@ public class InterruptDemo {
         Thread.sleep(2000);
 
         /**
-         * 中断线程并设置中断标记,但是不会阻断while ture的运行
+         * 中断线程并设置中断标记,但是不会阻断while true的运行
          */
         thread.interrupt();
     }

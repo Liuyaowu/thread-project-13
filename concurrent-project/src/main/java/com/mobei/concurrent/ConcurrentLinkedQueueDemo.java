@@ -12,12 +12,15 @@ public class ConcurrentLinkedQueueDemo {
     public static void main(String[] args) {
         ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
 
-        queue.offer("e1");
-        queue.offer("e2");
-        queue.offer("e3");
+        queue.add("add1");
 
-        // System.out.println(queue.poll());
+        queue.offer("offer1");
+        queue.offer("offer2");
+        queue.offer("offer3");
+
+        System.out.println(queue.poll());
         System.out.println(queue.peek());
+        System.out.println(queue.remove());
 
         System.out.println(queue);
     }
